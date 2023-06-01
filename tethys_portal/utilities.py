@@ -50,3 +50,56 @@ def log_user_in(request, user=None, username=None):
         return redirect(request.GET["next"])
     else:
         return redirect("app_library")
+
+
+from importlib import import_module
+
+
+class MissingOptionalDependency(ImportError):
+    pass
+
+
+class FailedImport:
+    def __init__(self, module, import_error):
+        self.module_name = module
+        self.error = import_error
+
+    def __getattr__(self, item):
+        raise MissingOptionalDependency(
+                f'Optional dependency "{self.module_name}" was not able to be imported because of the following error:\n'
+                f'{self.error}.'
+            )
+
+
+def optional_import(module, from_module=None, error_message=None):
+    try:
+        if from_module:
+            return getattr(import_module(from_module), module)
+        return import_module(module)
+    except ImportError as e:
+        return FailedImport(module, e)
+
+
+class OptionalModule:
+    def __init__(self, module_name):
+        self.module_name = module_name
+        self.module = None
+        self.error = None
+        try:
+            self.module = import_module(self.module_name)
+        except ImportError as e:
+            self.error = e
+
+    def __call__(self, error_message=None):
+        if self.module:
+            return self.module
+        else:
+            error_message = error_message or (
+                f'Optional dependency "{self.module_name}" was not able to be imported because of the '
+                f'following error:\n{self.error}.'
+            )
+            raise MissingOptionalDependency(error_message)
+
+
+def lazy_import(module_name):
+    return OptionalModule(module_name)
